@@ -1,0 +1,54 @@
+def find_odd_divisors(N):
+    """Find all odd divisors >= 3 of positive integer N."""
+    divisors = []
+    d = 3
+    while d * d <= N:
+        if N % d == 0:
+            divisors.append(d)
+            if d != N // d and (N // d) % 2 == 1:
+                divisors.append(N // d)
+        d += 2
+    if N % 2 == 1 and N >= 3:
+        divisors.append(N)
+    return sorted(set(divisors))
+
+def check_equation(m, ell):
+    """Check if 4m^4 - m*ell + 1 = 2^(n-2) * ell^n for some odd n >= 5."""
+    L = 4 * m**4 - m * ell + 1
+    
+    # L must be positive
+    if L <= 0:
+        return False, None
+    
+    # Check if L is divisible by ell^5 (necessary condition)
+    if L % (ell**5) != 0:
+        return False, None
+    
+    # Check for small values of n
+    for n in range(5, 51, 2):  # Check odd n from 5 to 49
+        rhs = (2**(n-2)) * (ell**n)
+        if L == rhs:
+            return True, n
+    
+    return False, None
+# Main verification
+solutions = []
+checked_count = 0
+for m in range(-99, 100):
+    if m == 0 or m % 2 == 0:  # Skip even m and 0
+        continue
+    
+    N = 4 * m**4 + 1
+    divisors = find_odd_divisors(N)
+    
+    for ell in divisors:
+        checked_count += 1
+        has_solution, n = check_equation(m, ell)
+        if has_solution:
+            solutions.append((m, ell, n))
+            print(f"Solution found: m={m}, ell={ell}, n={n}")
+
+print(f"\nTotal pairs checked: {checked_count}")
+print(f"Solutions found: {len(solutions)}")
+if len(solutions) == 0:
+    print("NO SOLUTIONS EXIST - Theorem is proved!")
