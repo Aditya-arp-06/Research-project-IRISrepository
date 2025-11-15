@@ -1,0 +1,81 @@
+import time
+from tabulate import tabulate
+
+def search_diophantine_solutions(x_min, x_max, y_min, y_max, n_min, n_max):
+    """
+    Searches for integer solutions to the Diophantine equation y^n + xy = x^4 + 4.
+    Args:
+        x_min (int): The minimum value for x.
+        x_max (int): The maximum value for x.
+        y_min (int): The minimum value for y.
+        y_max (int): The maximum value for y.
+        n_min (int): The minimum odd value for n (must be >= 5).
+        n_max (int): The maximum odd value for n.
+    Returns:
+        int: The number of solutions found.
+    """
+    print("--- Starting Computational Search ---")
+    print(f"Searching for x in [{x_min}, {x_max}]")
+    print(f"Searching for y in [{y_min}, {y_max}]")
+    print(f"Testing for odd n from {n_min} to {n_max}")
+    print("-" * 35)
+    start_time = time.time()
+    solutions_found = 0
+    
+    n_values = [n for n in range(n_min, n_max + 1) if n % 2 != 0]
+    for x in range(x_min, x_max + 1):
+        for y in range(y_min, y_max + 1):
+            rhs = x**4 - x * y + 4
+            
+            for n in n_values:
+                if y == 0:
+                    lhs = 0
+                elif y == 1:
+                    lhs = 1
+                elif y == -1:
+                    lhs = -1
+                else:
+                    if rhs < 0 and y > 0:
+                        continue 
+                    lhs = y**n
+
+                if lhs == rhs:
+                    print("\n" + "*"*20)
+                    print(f"  SOLUTION FOUND!")
+                    print(f"  x = {x}, y = {y}, n = {n}")
+                    print("*"*20 + "\n")
+                    solutions_found += 1
+                    
+    end_time = time.time()
+    duration = end_time - start_time
+    
+    print("--- Search Complete ---")
+    print(f"Total time taken: {duration:.2f} seconds")
+    
+    return solutions_found, x_min, x_max, y_min, y_max, f"Odd n from {n_min} to {n_max}"
+
+if __name__ == "__main__":
+    X_MIN = -1000
+    X_MAX = 1000
+    Y_MIN = -1000
+    Y_MAX = 1000
+    N_MIN = 5   
+    N_MAX = 99  
+    
+    num_solutions, x_min, x_max, y_min, y_max, n_range_str = search_diophantine_solutions(
+        X_MIN, X_MAX, Y_MIN, Y_MAX, N_MIN, N_MAX
+    )
+    
+    table_data = [
+        ["x values", x_min, x_max],
+        ["y values", y_min, y_max],
+        ["n values tested", n_range_str, ""],
+        ["Total Combinations Checked", f"~{(x_max-x_min+1)*(y_max-y_min+1)*len(range(N_MIN, N_MAX+1, 2)):,}", ""],
+        ["Solutions Found", num_solutions, ""]
+    ]
+    headers = ["Parameter", "Value / Lower Bound", "Upper Bound"]
+    
+    print("\n\n" + "="*50)
+    print("   Computational Evidence Summary Table")
+    print("="*50)
+    print(tabulate(table_data, headers=headers, tablefmt="grid"))
