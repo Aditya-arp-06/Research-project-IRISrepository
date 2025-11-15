@@ -1,0 +1,44 @@
+def search_solutions(x_range, y_range, m_min):
+
+    print("--- Starting Robust Computational Search ---")
+    print(f"Equation: y^3 + xy = x^m + 4")
+    print(f"Searching for integer (x, y) pairs...")
+    print(f"Condition: Solutions must have integer m >= {m_min}")
+    print(f"x search range: [{x_range[0]}, {x_range[1]}]")
+    print(f"y search range: [{y_range[0]}, {y_range[1]}]")
+    print("-" * 50)
+
+    start_time = time.time()
+    solutions_found = []
+    
+    total_x = x_range[1] - x_range[0] + 1
+    total_combinations = total_x * (y_range[1] - y_range[0] + 1)
+    print(f"Total (x, y) pairs to check: {total_combinations:,}\n")
+
+    for i, x in enumerate(range(x_range[0], x_range[1] + 1)):
+        if i > 0 and (i * 100 // total_x) > ((i - 1) * 100 // total_x):
+            progress = (i * 100) / total_x
+            print(f"  Progress: {progress:.0f}% complete...")
+
+        for y in range(y_range[0], y_range[1] + 1):
+            try:
+                target_val = y**3 + x * y - 4
+            except OverflowError:
+                continue 
+         found_m = find_integer_exponent(x, target_val)
+
+            if found_m is not None and found_m >= m_min:
+                solution = {
+                    "x": x,
+                    "y": y,
+                    "m (found)": found_m,
+                    "value (x^m)": target_val
+                }
+                print(f"  --> SOLUTION FOUND: {solution}")
+                solutions_found.append(solution)
+
+    end_time = time.time()
+    duration = end_time - start_time
+    print("\n--- Search Complete ---")
+    print(f"Total time taken: {duration:.2f} seconds")
+    return solutions_found, total_combinations
