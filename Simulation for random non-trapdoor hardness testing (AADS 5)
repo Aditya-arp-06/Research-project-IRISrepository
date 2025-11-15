@@ -1,0 +1,39 @@
+import random
+import time
+p=1862288878403111507704466921153924782347882580278768046697949417795620192
+3519985462885970372677627596670808508606453749488332382656433530621322900
+7581868556601222689760803814518160901754743851805186545967165514790656454
+1758032703877561236513201946922173244282882323524589601601705538155097508
+5565743789294173252169604413931188659433051344677642144523997940332798398
+2072296775536305479627568964049896447170580268769984290486476164897252957
+3552500067719594458015696036881856661437585707446441163528899231705497047
+1322865171873735732770862173223265521491550675727544982886597523455569001
+782819619088077658625905170069321
+
+def try_find_solution_modp(c, trials, xr, yr):
+    for _ in range(trials):
+        x = random.randint(-xr, xr)
+        y = random.randint(-yr, yr)
+        lhs = (pow(y,3,p) + (x*y) % p) % p
+        rhs = (pow(x,4,p) + c) % p
+        if lhs == rhs:
+            return (x,y)
+    return None
+
+if __name__ == "__main__":
+    trials = 200
+    xr = 100
+    yr = 100
+    samples = 1000
+    successes = 0
+    total_time = 0.0
+    for i in range(samples):
+        c = random.randrange(p)
+        start = time.time()
+        sol = try_find_solution_modp(c, trials, xr, yr)
+        elapsed = time.time() - start
+        total_time += elapsed
+        if sol is not None:
+            successes += 1
+    print(f"Random-sampling hardness: successes={successes}/{samples}")
+    print(f"Average time per sample: {total_time/samples*1000:.2f} ms")
