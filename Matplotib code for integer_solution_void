@@ -1,0 +1,61 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+
+def plot_integer_void(m=3, n=4, c=4, grid_range=100):
+    print(f"Searching for integer solutions to y^{m} + xy = x^{n} + {c} in the range [{-grid_range}, {grid_range}]...")
+    
+    x_coords = np.arange(-grid_range, grid_range + 1)
+    y_coords = np.arange(-grid_range, grid_range + 1)
+    x_grid, y_grid = np.meshgrid(x_coords, y_coords)
+
+    x_grid = x_grid.astype(np.int64)
+    y_grid = y_grid.astype(np.int64)
+    residuals = y_grid**m + x_grid*y_grid - x_grid**n - c
+
+    if np.any(residuals == 0):
+        print("\n*** WARNING: An integer solution was found! ***")
+        zero_indices = np.where(residuals == 0)
+        for i in range(len(zero_indices[0])):
+            x_sol = x_grid[zero_indices[0][i], zero_indices[1][i]]
+            y_sol = y_grid[zero_indices[0][i], zero_indices[1][i]]
+            print(f"Solution found at: ({x_sol}, {y_sol})")
+    else:
+        print("No integer solutions found in the tested range. As expected.")
+
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(14, 12))
+
+    abs_residuals = np.abs(residuals) + 1
+    
+    scatter = ax.scatter(
+        x_grid, 
+        y_grid, 
+        c=abs_residuals, 
+        cmap='viridis',
+        norm=LogNorm(), 
+        s=5,
+        alpha=0.8
+    )
+
+    title = f"Integer Solution Void for $y^{m} + xy = x^{n} + {c}$"
+    ax.set_title(title, fontsize=20, pad=20, color='white')
+    ax.set_xlabel("Integer x", fontsize=14, color='lightgray')
+    ax.set_ylabel("Integer y", fontsize=14, color='lightgray')
+    ax.set_aspect('equal', adjustable='box')
+    ax.grid(True, color='gray', linestyle='--', linewidth=0.5, alpha=0.3)
+    cbar = fig.colorbar(scatter, ax=ax)
+    cbar.set_label('$|y^m + xy - x^n - c| + 1$ (Log Scale)', fontsize=14, color='lightgray')
+    
+    ax.text(0, grid_range * 0.8, 
+            'No points achieve a residual of 0,\n'
+            'confirming no integer solutions exist.',
+            ha='center', va='center',
+            fontsize=14, color='cyan',
+            bbox=dict(boxstyle="round,pad=0.5", fc="black", ec="cyan", lw=1))
+            
+    print("\nGenerating the 'Integer Solution Void' plot...")
+    plt.show()
+
+if __name__ == '__main__':
+    plot_integer_void(m=3, n=4, c=4, grid_range=100)
