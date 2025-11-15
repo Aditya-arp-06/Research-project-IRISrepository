@@ -1,0 +1,22 @@
+def classify_family(c_range):
+    """Classify which c have solutions"""
+    solutions_dict = {}
+    
+    for c in range(-c_range, c_range + 1):
+        solutions = []
+        for x in range(-100, 101):
+            rhs = x**4 + c
+            for y in range(-100, 101):
+                if y**3 + x*y == rhs:
+                    solutions.append((x,y))
+        
+        if solutions:
+            solutions_dict[c] = solutions
+    
+    return solutions_dict
+
+# Run classification
+results = classify_family(1000)
+print(f"Constants with solutions: {len(results)}")
+for c, sols in sorted(results.items()):
+    print(f"  c={c}: {len(sols)} solutions")     
