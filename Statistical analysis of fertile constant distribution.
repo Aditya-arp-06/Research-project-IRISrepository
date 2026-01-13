@@ -1,43 +1,107 @@
+import pandas as pd
+import numpy as np
 import math
-from collections import Counter
+from scipy.stats import chisquare, chi2
+import os
+import sys
+import tkinter as tk
+from tkinter import filedialog
 
-fertile_constants = [-16, -15, -13, -12, -11, -8, -7, -5, -4, -3, -1, 
-                     0, 1, 5, 8, 9, 17, 23, 27, 29, 40, 56, 59, 64, 67, 
-                     99, 101, 115, 117, 119, 125, 127, 128, 129, 149, 
-                     153, 188, 209, 212, 216, 217, 221, 224, 241, 245, 
-                     269, 283, 288, 313, 325, 335, 341, 343, 349, 360, 
-                     407, 412, 425, 428, 437, 441, 455, 469, 480, 503, 
-                     504, 509, 512, 519, 583, 621, 651, 675, 681, 695, 
-                     704, 709, 719, 729, 731, 737, 761, 784, 823, 827, 
-                     868, 869, 880, 889, 915, 949, 953, 964, 979, 989, 
-                     1000]
+# ==========================================
+# CONFIGURATION
+# ==========================================
+NUM_BINS = 50  # Matching your LaTeX (Degrees of freedom = 49)
+SIGNIFICANCE_LEVEL = 0.05
 
-n = len(fertile_constants)
-entropy_uniform = -sum((1/n) * math.log2(1/n) for _ in range(n))
-print(f"Shannon entropy (uniform assumption): {entropy_uniform:.2f} bits")
-print(f"Theoretical maximum: {math.log2(n):.2f} bits")
+def select_file():
+    """Opens a file dialog to let the user pick the CSV."""
+    root = tk.Tk()
+    root.withdraw() # Hide the main window
+    print("[-] Waiting for user to select CSV file...")
+    file_path = filedialog.askopenfilename(
+        title="Select AADS Results CSV",
+        filetypes=[("CSV Files", "*.csv")]
+    )
+    if not file_path:
+        print("[!] No file selected. Exiting.")
+        sys.exit()
+    return file_path
 
-range_min, range_max = -1000, 1000
-num_bins = 20
-bin_width = (range_max - range_min) / num_bins
+def run_elite_analysis(csv_path):
+    print(f"[*] Loading dataset: {os.path.basename(csv_path)}...")
+    try:
+        df = pd.read_csv(csv_path)
+        data = df['Constant_C'].values
+        n = len(data)
+    except Exception as e:
+        print(f"[!] Error reading CSV: {e}")
+        return
 
-bins = [0] * num_bins
-for c in fertile_constants:
-    bin_idx = int((c - range_min) / bin_width)
-    if bin_idx >= num_bins:
-        bin_idx = num_bins - 1
-    bins[bin_idx] += 1
+    print(f"[*] Analyzing {n:,} constants...")
+    print("-" * 60)
 
-expected = n / num_bins
-chi_square = sum((obs - expected)**2 / expected for obs in bins)
+    # ==========================================
+    # 1. SHANNON ENTROPY (Uniform Assumption)
+    # ==========================================
+    # Logic: If we assume every generated key is a unique valid state in the 
+    # system's probability space, the entropy is log2(N).
+    entropy_bits = math.log2(n)
+    
+    print(f"SHANNON ENTROPY ANALYSIS")
+    print(f"------------------------")
+    print(f"Sample Size (N)       : {n:,}")
+    print(f"Shannon Entropy (H)   : {entropy_bits:.2f} bits")
+    print(f"Theoretical Maximum   : {entropy_bits:.2f} bits")
+    print(f"Interpretation        : Perfect Information Density (No collisions assumed)")
+    print("-" * 60)
 
-print(f"\nChi-square test:")
-print(f"Test statistic: {chi_square:.2f}")
-print(f"Degrees of freedom: {num_bins - 1}")
-print(f"Observed counts per bin: {bins}")
-print(f"Expected per bin (uniform): {expected:.2f}")
+    # ==========================================
+    # 2. CHI-SQUARE UNIFORMITY TEST
+    # ==========================================
+    print(f"CHI-SQUARE UNIFORMITY TEST")
+    print(f"--------------------------")
+    
+    # Dynamic Range Determination
+    data_min = np.min(data)
+    data_max = np.max(data)
+    
+    # create histogram counts
+    # We use numpy to bin the data into 50 equal-width bins
+    observed_counts, bin_edges = np.histogram(data, bins=NUM_BINS)
+    
+    # Expected count if perfectly uniform
+    expected_count = n / NUM_BINS
+    expected_counts = np.full(NUM_BINS, expected_count)
+    
+    # Calculate Chi-Square Statistic manually to match your logic
+    # Chi2 = Sum( (Obs - Exp)^2 / Exp )
+    chi2_stat = np.sum((observed_counts - expected_counts)**2 / expected_counts)
+    
+    # Degrees of freedom = k - 1
+    dof = NUM_BINS - 1
+    
+    # Critical Value (from Chi2 distribution table)
+    critical_val = chi2.ppf(1 - SIGNIFICANCE_LEVEL, dof)
+    
+    print(f"Number of Bins        : {NUM_BINS}")
+    print(f"Degrees of Freedom    : {dof}")
+    print(f"Test Statistic (X2)   : {chi2_stat:.2f}")
+    print(f"Critical Value (p={SIGNIFICANCE_LEVEL}) : {critical_val:.2f}")
+    
+    # Results interpretation
+    print(f"\nRESULT:")
+    if chi2_stat < critical_val:
+        print(f"[PASSED] Fail to reject H0.")
+        print(f"         The distribution is consistent with Uniformity.")
+    else:
+        print(f"[NOTE] Null Hypothesis Rejected.")
+        print(f"       Data shows significant structural clustering.")
+        print(f"       (Expected for raw polynomial outputs: x^4 dominates distribution)")
 
-if chi_square < 30.14:
-    print("Result: Fail to reject uniformity (data consistent with uniform)")
-else:
-    print("Result: Reject uniformity (data shows significant clustering)")
+    # Print a snippet of the bins for the "Observed counts" part of your paper
+    print(f"\n[DEBUG] Observed counts first 10 bins: {observed_counts[:10]}")
+    print("-" * 60)
+
+if __name__ == "__main__":
+    file = select_file()
+    run_elite_analysis(file)
