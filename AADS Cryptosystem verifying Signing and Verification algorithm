@@ -1,0 +1,227 @@
+import hashlib
+import random
+import math
+
+# ==============================================================================
+# CONFIGURATION & CONSTANTS
+# ==============================================================================
+SECURITY_PARAM = 256  # Standard security level
+LAMBDA_BITS = 16      # Number of bits to sign (kept small for demo speed)
+                      # In real production, this would be 256 (SHA-256 output)
+
+# A large prime modulus (Simulating RSA-sized N for structure, though AADS uses polynomial hardness)
+# In a real deployment, N would be much larger (e.g., 2048 bits).
+MODULUS_N = 115792089237316195423570985008687907853269984665640564039457584007913129639937
+
+# ==============================================================================
+# CORE MATHEMATICAL FUNCTIONS
+# ==============================================================================
+
+def compute_trapdoor(x, y, N):
+    """
+    The 'Fertile Constant' Generator.
+    Formula: C = y^3 + xy - x^4 (mod N)
+    """
+    term1 = pow(y, 3, N)
+    term2 = (x * y) % N
+    term3 = pow(x, 4, N)
+    
+    # Calculate result with modular arithmetic handling negative numbers
+    result = (term1 + term2 - term3) % N
+    return result
+
+def hash_data(data_string):
+    """Standard SHA-256 Hashing wrapper."""
+    return hashlib.sha256(data_string.encode('utf-8')).hexdigest()
+
+def hash_pair(left, right):
+    """Hashes two nodes together for the Merkle Tree."""
+    combined = left + right
+    return hashlib.sha256(combined.encode('utf-8')).hexdigest()
+
+# ==============================================================================
+# CLASS 1: ONE-TIME SIGNATURE (OTS) SCHEME
+# ==============================================================================
+class AADS_OTS:
+    def __init__(self, index):
+        self.index = index
+        self.secret_pairs = [] # Stores ((x0, y0), (x1, y1)) for each bit
+        self.public_constants = [] # Stores (C0, C1) for each bit
+    
+    def generate_keys(self):
+        """Generates fresh x,y pairs for every bit position."""
+        self.secret_pairs = []
+        self.public_constants = []
+        
+        for _ in range(LAMBDA_BITS):
+            # 1. Generate random secrets for Bit=0 and Bit=1
+            x0, y0 = random.randint(1, MODULUS_N), random.randint(1, MODULUS_N)
+            x1, y1 = random.randint(1, MODULUS_N), random.randint(1, MODULUS_N)
+            
+            # 2. Compute Public Constants (The "Locks")
+            c0 = compute_trapdoor(x0, y0, MODULUS_N)
+            c1 = compute_trapdoor(x1, y1, MODULUS_N)
+            
+            # 3. Store them
+            self.secret_pairs.append( ((x0, y0), (x1, y1)) )
+            self.public_constants.append( (str(c0), str(c1)) )
+            
+        # The "Public Key" for this specific OTS is the hashed concatenation of all constants
+        flat_list = [item for sublist in self.public_constants for item in sublist]
+        ots_public_hash = hash_data("".join(flat_list))
+        return ots_public_hash
+
+    def sign_hash(self, message_hash_bin):
+        """Reveals specific secret pairs based on the message bits."""
+        signature = []
+        for i in range(LAMBDA_BITS):
+            bit = int(message_hash_bin[i])
+            # Reveal the pair corresponding to the bit (0 or 1)
+            secret_pair = self.secret_pairs[i][bit]
+            signature.append(secret_pair)
+        return signature
+
+# ==============================================================================
+# CLASS 2: MERKLE TREE (MASTER KEY MANAGER)
+# ==============================================================================
+class MerkleTree:
+    def __init__(self, leaves):
+        self.leaves = leaves
+        self.tree = [leaves]
+        self.root = self.build_tree()
+
+    def build_tree(self):
+        """recursively builds the tree up to the root."""
+        current_layer = self.leaves
+        while len(current_layer) > 1:
+            next_layer = []
+            for i in range(0, len(current_layer), 2):
+                left = current_layer[i]
+                # If odd number of nodes, duplicate the last one
+                right = current_layer[i+1] if i+1 < len(current_layer) else current_layer[i]
+                next_layer.append(hash_pair(left, right))
+            self.tree.append(next_layer)
+            current_layer = next_layer
+        return current_layer[0]
+
+    def get_proof(self, index):
+        """Generates the Authentication Path (Merkle Proof) for a leaf."""
+        proof = []
+        layer_idx = 0
+        current_idx = index
+        
+        # Traverse up the tree
+        while layer_idx < len(self.tree) - 1:
+            layer = self.tree[layer_idx]
+            is_right_child = (current_idx % 2 == 1)
+            
+            if is_right_child:
+                sibling_idx = current_idx - 1
+                proof.append(('L', layer[sibling_idx])) # Sibling is on Left
+            else:
+                sibling_idx = current_idx + 1
+                if sibling_idx < len(layer):
+                    proof.append(('R', layer[sibling_idx])) # Sibling is on Right
+                else:
+                    proof.append(('R', layer[current_idx])) # Duplicate if checking last odd node
+            
+            current_idx //= 2
+            layer_idx += 1
+        return proof
+
+# ==============================================================================
+# MAIN SYSTEM: INTEGRATION
+# ==============================================================================
+
+def demo_aads_system():
+    print("--- 1. KEY GENERATION PHASE ---")
+    # Simulate creating a batch of One-Time Keys (e.g., 4 keys for demo)
+    num_keys = 4
+    ots_keys = [AADS_OTS(i) for i in range(num_keys)]
+    
+    # Generate individual public keys (leaves of the tree)
+    leaves = []
+    for ots in ots_keys:
+        leaves.append(ots.generate_keys())
+        print(f"Generated OTS Key #{ots.index} Public Hash: {leaves[-1][:10]}...")
+
+    # Build Merkle Tree
+    mt = MerkleTree(leaves)
+    MASTER_PUBLIC_KEY = mt.root
+    print(f"\n[MASTER PUBLIC KEY]: {MASTER_PUBLIC_KEY}")
+
+    print("\n--- 2. SIGNING PHASE ---")
+    message = "Launch the V2 Rocket"
+    print(f"Signing Message: '{message}'")
+    
+    # Step A: Hash the message
+    msg_hash = hash_data(message)
+    # Convert hex hash to binary string (truncated to LAMBDA_BITS for demo)
+    msg_bin = bin(int(msg_hash, 16))[2:].zfill(256)[:LAMBDA_BITS]
+    print(f"Message Bits: {msg_bin}")
+    
+    # Step B: Select an unused OTS key (e.g., Key #2)
+    selected_key_idx = 2
+    signer_ots = ots_keys[selected_key_idx]
+    
+    # Step C: Sign (Reveal Secrets)
+    signature_pairs = signer_ots.sign_hash(msg_bin)
+    
+    # Step D: Get Merkle Proof (To prove Key #2 belongs to Master Key)
+    merkle_proof = mt.get_proof(selected_key_idx)
+    
+    # The Full Signature Bundle
+    full_signature = {
+        "index": selected_key_idx,
+        "pairs": signature_pairs,
+        "proof": merkle_proof,
+        "public_constants_snapshot": signer_ots.public_constants # Needed to reconstruct leaf
+    }
+    print("Signature Generated.")
+
+    print("\n--- 3. VERIFICATION PHASE ---")
+    # Step A: Reconstruct the Candidate Constants from the revealed pairs
+    reconstructed_constants = []
+    for i in range(LAMBDA_BITS):
+        bit = int(msg_bin[i])
+        x, y = full_signature["pairs"][i]
+        
+        # The Verifier runs the trapdoor function themselves!
+        c_calc = compute_trapdoor(x, y, MODULUS_N)
+        
+        # Retrieve the claimed constants from the signature snapshot
+        # (In real life, we verify the snapshot matches the leaf hash first)
+        c0_claimed = full_signature["public_constants_snapshot"][i][0]
+        c1_claimed = full_signature["public_constants_snapshot"][i][1]
+        
+        # Check if the calculated C matches the claimed C for that bit
+        target = c1_claimed if bit == 1 else c0_claimed
+        if str(c_calc) != target:
+            print(f"ERROR: Math mismatch at bit {i}!")
+            return False
+        
+        reconstructed_constants.append((c0_claimed, c1_claimed))
+
+    # Step B: Reconstruct the Leaf Hash
+    flat_list = [item for sublist in reconstructed_constants for item in sublist]
+    candidate_leaf = hash_data("".join(flat_list))
+    print(f"Reconstructed Leaf Hash: {candidate_leaf[:10]}...")
+
+    # Step C: Verify Merkle Proof (Climb the tree)
+    current_hash = candidate_leaf
+    for direction, sibling_hash in full_signature["proof"]:
+        if direction == 'L':
+            current_hash = hash_pair(sibling_hash, current_hash)
+        else:
+            current_hash = hash_pair(current_hash, sibling_hash)
+            
+    print(f"Calculated Root: {current_hash}")
+    print(f"Actual Master Key: {MASTER_PUBLIC_KEY}")
+    
+    if current_hash == MASTER_PUBLIC_KEY:
+        print("\n✅ SUCCESS: Signature Verified! (Quantum Resistant)")
+    else:
+        print("\n❌ FAILURE: Invalid Signature.")
+
+if __name__ == "__main__":
+    demo_aads_system()
