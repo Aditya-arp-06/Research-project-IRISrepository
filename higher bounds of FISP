@@ -1,0 +1,132 @@
+import csv
+import time
+import sys
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+
+# ==========================================
+# CONFIGURATION
+# ==========================================
+XY_BOUND = 1000           # Reduced to 1000 as requested
+C_LIMIT_POW = 100         # Computation limit 10^100
+CSV_FILENAME = 'fertile_constants_final.csv'
+GRAPH_FILENAME = 'fertile_distribution_elite.png'
+
+# ==========================================
+# THE CODE
+# ==========================================
+
+def run_elite_search():
+    print(f"--- INITIATING SYSTEM ---")
+    print(f"[*] Target Range: |x|, |y| <= {XY_BOUND}")
+    print(f"[*] Max Constant Size: 10^{C_LIMIT_POW}")
+    print(f"[*] Mode: Reverse Trapdoor Generation (High Efficiency)")
+    print(f"-------------------------------------------------------")
+
+    start_time = time.time()
+    
+    # Calculate limits
+    c_max_limit = 10 ** C_LIMIT_POW
+    total_pairs = (2 * XY_BOUND + 1) ** 2
+    
+    # Storage for Plotting (using lists for dynamic growth)
+    plot_k = []
+    
+    count = 0
+    
+    # Open CSV
+    try:
+        with open(CSV_FILENAME, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Constant_C', 'Value_x', 'Value_y']) # Header
+            
+            # Iterate x
+            for x in range(-XY_BOUND, XY_BOUND + 1):
+                x_4 = x**4
+                
+                # Iterate y
+                for y in range(-XY_BOUND, XY_BOUND + 1):
+                    
+                    # -----------------------------------
+                    # THE GENERATOR EQUATION
+                    # C = y^3 + xy - x^4
+                    # -----------------------------------
+                    c = (y**3) + (x * y) - x_4
+                    
+                    # Check 10^100 Limit (Though 1000^4 is much smaller, we keep the check)
+                    if abs(c) <= c_max_limit:
+                        # Write to CSV
+                        writer.writerow([c, x, y])
+                        count += 1
+                        
+                        # Collect for Graph (Downsample to avoid memory crash)
+                        # We keep 1 in every 100 points for the graph
+                        if count % 100 == 0:
+                            plot_k.append(c)
+
+                # -----------------------------------
+                # LIVE TERMINAL DASHBOARD
+                # -----------------------------------
+                # Updates every row of x (every 2000 items)
+                percent = (count / total_pairs) * 100
+                elapsed = time.time() - start_time
+                
+                # Dynamic Status Bar
+                sys.stdout.write(f"\r[SCANNING] Progress: {percent:.2f}% | Found: {count:,} keys | Time: {elapsed:.1f}s")
+                sys.stdout.flush()
+
+    except KeyboardInterrupt:
+        print("\n\n[!] Interrupted by user. Saving current progress...")
+
+    print(f"\n\n--- SEARCH COMPLETE ---")
+    print(f"Total Fertile Constants Generated: {count:,}")
+    print(f"CSV Saved to: {os.path.abspath(CSV_FILENAME)}")
+    
+    # ==========================================
+    # ELITE GRAPH GENERATION
+    # ==========================================
+    print(f"[*] Generating Elite Visualizations...")
+    
+    if not plot_k:
+        print("[!] No data to plot.")
+        return
+
+    # Convert to numpy for fast plotting
+    data = np.array(plot_k)
+    
+    # Avoid log(0) errors
+    data_abs = np.abs(data)
+    data_abs = data_abs[data_abs > 0] 
+    
+    plt.style.use('dark_background')
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    # Histogram of Key Magnitudes (Log Scale)
+    n, bins, patches = ax.hist(np.log10(data_abs), bins=100, color='#00ffcc', alpha=0.8, edgecolor='black', linewidth=0.5)
+    
+    # Aesthetics
+    ax.set_title(f'AADS Key Space Density (Sampled)\nInput Bounds: $\pm${XY_BOUND}', fontsize=16, color='white', weight='bold')
+    ax.set_xlabel('Magnitude of Constant $C$ ($10^x$)', fontsize=12, color='#cccccc')
+    ax.set_ylabel('Density of Keys', fontsize=12, color='#cccccc')
+    ax.grid(True, linestyle='--', alpha=0.2)
+    
+    # Highlight the peak
+    ax.text(0.05, 0.95, f'Total Keys: {count:,}\nMax Magnitude: $10^{{{int(np.max(np.log10(data_abs)))}}}$', 
+            transform=ax.transAxes, verticalalignment='top', 
+            bbox=dict(boxstyle='round', facecolor='#222222', alpha=0.9))
+
+    plt.tight_layout()
+    plt.savefig(GRAPH_FILENAME, dpi=300)
+    print(f"[*] Graph Saved to: {os.path.abspath(GRAPH_FILENAME)}")
+    
+    # Open the graph automatically (Works on Windows/Mac/Linux)
+    try:
+        if sys.platform == 'win32': os.startfile(GRAPH_FILENAME)
+        elif sys.platform == 'darwin': os.system(f'open "{GRAPH_FILENAME}"')
+        else: os.system(f'xdg-open "{GRAPH_FILENAME}"')
+    except:
+        pass
+
+if __name__ == "__main__":
+    run_elite_search()
