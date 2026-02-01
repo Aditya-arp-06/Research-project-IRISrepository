@@ -1,0 +1,141 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import os
+import sys
+
+# ========================================================
+# CONFIGURATION
+# ========================================================
+DEFAULT_FILENAME = 'fertile_constants_final.csv'
+THEORETICAL_LIMIT = 100  # 10^100
+
+def load_data():
+    """Smart loader: Checks local file first, else asks user."""
+    if os.path.exists(DEFAULT_FILENAME):
+        print(f"[*] Found {DEFAULT_FILENAME} automatically.")
+        return DEFAULT_FILENAME
+    else:
+        # Fallback to file dialog if default file is missing
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+            root = tk.Tk()
+            root.withdraw()
+            print("[-] Default file not found. Please select CSV...")
+            file_path = filedialog.askopenfilename(
+                title="Select AADS Results CSV",
+                filetypes=[("CSV Files", "*.csv")]
+            )
+            return file_path
+        except ImportError:
+            print("[!] Tkinter not found. Please put 'fertile_constants_final.csv' in this folder.")
+            return None
+
+def create_elite_dashboard(csv_path):
+    if not csv_path: return
+
+    print(f"[*] Loading data from {os.path.basename(csv_path)}...")
+    df = pd.read_csv(csv_path)
+    
+    # Calculate Magnitude (Log10) of Constant C
+    # Add epsilon to avoid log(0)
+    print("[*] Computing cryptographic magnitudes...")
+    df['magnitude'] = np.log10(np.abs(df['Constant_C']) + 1e-10)
+    
+    # Downsample for Scatter Plot (Prevents lag)
+    # We keep 50,000 points for the visual "starfield"
+    if len(df) > 50000:
+        plot_df = df.sample(n=50000, random_state=42)
+    else:
+        plot_df = df
+
+    # ========================================================
+    # VISUALIZATION SETUP
+    # ========================================================
+    plt.style.use('dark_background')
+    fig = plt.figure(figsize=(16, 9))
+    
+    # Title
+    plt.suptitle("AADS Cryptosystem: Trapdoor Density & Theoretical Hardness", 
+                 fontsize=20, color='white', weight='bold')
+    
+    # --------------------------------------------------------
+    # PLOT 1: The Trapdoor Topology (Heatmap)
+    # --------------------------------------------------------
+    ax1 = plt.subplot2grid((2, 3), (0, 0), colspan=2, rowspan=2)
+    
+    sc = ax1.scatter(plot_df['Value_x'], plot_df['Value_y'], 
+                     c=plot_df['magnitude'], cmap='plasma', 
+                     s=2, alpha=0.7)
+    
+    ax1.set_title("Trapdoor Function Topology (Sampled View)", fontsize=14, color='#00ffcc')
+    ax1.set_xlabel("Secret Key $x$", fontsize=10)
+    ax1.set_ylabel("Secret Key $y$", fontsize=10)
+    
+    # Dynamic Limits
+    bound = max(abs(plot_df['Value_x'].max()), abs(plot_df['Value_x'].min()))
+    ax1.set_xlim(-bound, bound)
+    ax1.set_ylim(-bound, bound)
+    
+    cbar = plt.colorbar(sc, ax=ax1)
+    cbar.set_label("Magnitude of Public Key ($10^x$)", fontsize=10)
+
+    # --------------------------------------------------------
+    # PLOT 2: The 10^100 Comparison (The Evidence)
+    # --------------------------------------------------------
+    ax2 = plt.subplot2grid((2, 3), (0, 2), rowspan=2)
+    
+    # Histogram
+    counts, bins, _ = ax2.hist(df['magnitude'], bins=60, 
+                               range=(0, THEORETICAL_LIMIT), 
+                               color='#00ffcc', alpha=0.8, orientation='horizontal')
+    
+    # Axes adjustments
+    ax2.set_title("Experimental vs Theoretical\nKey Space ($10^{100}$)", fontsize=14, color='#ff00ff')
+    ax2.set_ylabel("Magnitude ($10^x$)", fontsize=12)
+    ax2.set_xlabel("Frequency (Density)", fontsize=12)
+    ax2.set_ylim(0, THEORETICAL_LIMIT + 5) 
+    
+    # Theoretical Limit Line
+    ax2.axhline(y=THEORETICAL_LIMIT, color='red', linestyle='--', linewidth=2)
+    ax2.text(max(counts)*0.1, THEORETICAL_LIMIT + 1, "Target Security Bound (Googol)", color='red', fontsize=9)
+
+    # Experimental Peak Line
+    max_exp = df['magnitude'].max()
+    ax2.axhline(y=max_exp, color='yellow', linestyle=':', linewidth=2)
+    ax2.text(max(counts)*0.1, max_exp + 2, f"Experimental Peak ($10^{{{int(max_exp)}}})$", color='yellow', fontsize=9)
+
+    # The "Void" Annotation
+    mid_point = (THEORETICAL_LIMIT + max_exp) / 2
+    ax2.text(max(counts)/2, mid_point, "SPARSITY GAP\n(Computationally Intractable)", 
+             ha='center', va='center', color='gray', fontsize=8, style='italic')
+
+    # --------------------------------------------------------
+    # DATA INTEGRITY BOX
+    # --------------------------------------------------------
+    stats_text = (
+        f"DATA INTEGRITY CHECK:\n"
+        f"---------------------\n"
+        f"Total Keys Generated: {len(df):,}\n"
+        f"Search Bounds: |x,y| <= {bound}\n"
+        f"Max Key Found: ~10^{int(max_exp)}\n"
+        f"Theoretical Cap: 10^{THEORETICAL_LIMIT}\n"
+        f"KeyGen Method: Reverse Trapdoor"
+    )
+    
+    plt.figtext(0.02, 0.02, stats_text, 
+                fontsize=9, color='#00ff00', fontfamily='monospace',
+                bbox=dict(facecolor='black', edgecolor='#00ff00', alpha=0.8))
+
+    # Save
+    output_filename = "AADS_Final_Analysis_Elite.png"
+    plt.tight_layout(rect=[0, 0.05, 1, 0.95])
+    plt.savefig(output_filename, dpi=300)
+    print(f"[*] Graph saved as {output_filename}")
+    plt.show()
+
+if __name__ == "__main__":
+    csv_file = load_data()
+    if csv_file:
+        create_elite_dashboard(csv_file)
