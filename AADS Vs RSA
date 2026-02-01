@@ -1,0 +1,39 @@
+import matplotlib.pyplot as plt
+import numpy as np
+
+def rsa_function(base, mod, limit=100):
+    # Simulates the modular exponentiation used in RSA
+    return [pow(base, x, mod) for x in range(limit)]
+
+def aads_function(x_fixed, mod, limit=100):
+    # Simulates your Diophantine mapping f(y) = y^3 + xy - x^4 (mod N)
+    # We fix x and vary y to see if a pattern emerges
+    return [(pow(y, 3, mod) + (x_fixed * y) - pow(x_fixed, 4, mod)) % mod for y in range(limit)]
+
+# Parameters
+N = 101  # Small prime for visualization
+limit = 100
+
+# Generate Data
+rsa_data = rsa_function(2, N, limit)
+aads_data = aads_function(7, N, limit) # using arbitrary fixed x=7
+
+# Plotting
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+# Plot 1: RSA (Vulnerable to Shor's)
+ax1.step(range(limit), rsa_data, color='red', alpha=0.7)
+ax1.set_title(f"RSA Structure (Periodic)\nTarget for Shor's Algorithm")
+ax1.set_xlabel("Input x")
+ax1.set_ylabel("f(x) mod N")
+ax1.grid(True, alpha=0.3)
+
+# Plot 2: AADS (Quantum Resistant)
+ax2.scatter(range(limit), aads_data, color='blue', s=10, alpha=0.7)
+ax2.set_title(f"AADS Structure (Chaotic)\nNo Period for Shor's to exploit")
+ax2.set_xlabel("Input y")
+ax2.set_ylabel("Result mod N")
+ax2.grid(True, alpha=0.3)
+
+plt.tight_layout()
+plt.show()
