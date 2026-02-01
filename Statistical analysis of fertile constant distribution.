@@ -10,13 +10,12 @@ from tkinter import filedialog
 # ==========================================
 # CONFIGURATION
 # ==========================================
-NUM_BINS = 50  # Matching your LaTeX (Degrees of freedom = 49)
+NUM_BINS = 50  # Matches your Critical Limit ~66.34
 SIGNIFICANCE_LEVEL = 0.05
 
 def select_file():
-    """Opens a file dialog to let the user pick the CSV."""
     root = tk.Tk()
-    root.withdraw() # Hide the main window
+    root.withdraw()
     print("[-] Waiting for user to select CSV file...")
     file_path = filedialog.askopenfilename(
         title="Select AADS Results CSV",
@@ -31,7 +30,13 @@ def run_elite_analysis(csv_path):
     print(f"[*] Loading dataset: {os.path.basename(csv_path)}...")
     try:
         df = pd.read_csv(csv_path)
-        data = df['Constant_C'].values
+        # Attempt to auto-detect the column. If 'Constant_C' exists, use it.
+        # Otherwise, take the first column.
+        if 'Constant_C' in df.columns:
+            data = df['Constant_C'].values
+        else:
+            data = df.iloc[:, 0].values
+            
         n = len(data)
     except Exception as e:
         print(f"[!] Error reading CSV: {e}")
@@ -41,18 +46,33 @@ def run_elite_analysis(csv_path):
     print("-" * 60)
 
     # ==========================================
-    # 1. SHANNON ENTROPY (Uniform Assumption)
+    # 1. REAL SHANNON ENTROPY (The Rigorous Way)
     # ==========================================
-    # Logic: If we assume every generated key is a unique valid state in the 
-    # system's probability space, the entropy is log2(N).
-    entropy_bits = math.log2(n)
+    # We calculate H based on actual probability distribution P(x)
+    # H = -SUM(p(x) * log2(p(x)))
+    
+    value_counts = pd.Series(data).value_counts()
+    probs = value_counts / n
+    observed_entropy = -np.sum(probs * np.log2(probs))
+    
+    theoretical_max = math.log2(n)
     
     print(f"SHANNON ENTROPY ANALYSIS")
     print(f"------------------------")
     print(f"Sample Size (N)       : {n:,}")
-    print(f"Shannon Entropy (H)   : {entropy_bits:.2f} bits")
-    print(f"Theoretical Maximum   : {entropy_bits:.2f} bits")
-    print(f"Interpretation        : Perfect Information Density (No collisions assumed)")
+    print(f"Unique Values Found   : {len(value_counts):,}")
+    print(f"Observed Entropy      : {observed_entropy:.4f} bits")
+    print(f"Theoretical Maximum   : {theoretical_max:.4f} bits")
+    
+    # Calculate "Information Loss" (collisions)
+    info_loss = 100 * (1 - (observed_entropy / theoretical_max))
+    print(f"Information Loss      : {info_loss:.6f}%")
+    
+    if info_loss < 0.000001:
+        print(f"Interpretation        : PERFECT RANDOMNESS (No collisions detected)")
+    else:
+        print(f"Interpretation        : Minor Bias Detected")
+        
     print("-" * 60)
 
     # ==========================================
@@ -61,45 +81,27 @@ def run_elite_analysis(csv_path):
     print(f"CHI-SQUARE UNIFORMITY TEST")
     print(f"--------------------------")
     
-    # Dynamic Range Determination
-    data_min = np.min(data)
-    data_max = np.max(data)
-    
-    # create histogram counts
-    # We use numpy to bin the data into 50 equal-width bins
+    # Binning logic
     observed_counts, bin_edges = np.histogram(data, bins=NUM_BINS)
-    
-    # Expected count if perfectly uniform
     expected_count = n / NUM_BINS
     expected_counts = np.full(NUM_BINS, expected_count)
     
-    # Calculate Chi-Square Statistic manually to match your logic
-    # Chi2 = Sum( (Obs - Exp)^2 / Exp )
+    # Chi-Square Calculation
     chi2_stat = np.sum((observed_counts - expected_counts)**2 / expected_counts)
-    
-    # Degrees of freedom = k - 1
     dof = NUM_BINS - 1
-    
-    # Critical Value (from Chi2 distribution table)
     critical_val = chi2.ppf(1 - SIGNIFICANCE_LEVEL, dof)
     
     print(f"Number of Bins        : {NUM_BINS}")
     print(f"Degrees of Freedom    : {dof}")
     print(f"Test Statistic (X2)   : {chi2_stat:.2f}")
-    print(f"Critical Value (p={SIGNIFICANCE_LEVEL}) : {critical_val:.2f}")
+    print(f"Critical Value (0.05) : {critical_val:.2f}")
     
-    # Results interpretation
     print(f"\nRESULT:")
     if chi2_stat < critical_val:
-        print(f"[PASSED] Fail to reject H0.")
-        print(f"         The distribution is consistent with Uniformity.")
+        print(f"[PASSED] The distribution is statistically Uniform.")
     else:
-        print(f"[NOTE] Null Hypothesis Rejected.")
-        print(f"       Data shows significant structural clustering.")
-        print(f"       (Expected for raw polynomial outputs: x^4 dominates distribution)")
+        print(f"[NOTE] Null Hypothesis Rejected (Significant deviation).")
 
-    # Print a snippet of the bins for the "Observed counts" part of your paper
-    print(f"\n[DEBUG] Observed counts first 10 bins: {observed_counts[:10]}")
     print("-" * 60)
 
 if __name__ == "__main__":
